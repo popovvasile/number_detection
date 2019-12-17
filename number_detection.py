@@ -1,19 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
                           ConversationHandler, CallbackQueryHandler)
-from phonenumbers.phonenumberutil import region_code_for_number
-
 import phonenumbers
-import pycountry
 
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-
-logger = logging.getLogger(__name__)
 
 HANDLE_DECISION, HANDLE_NUMBER = range(2)
 
@@ -32,15 +23,14 @@ def start(update, context):
 def ask_operator_or_country(update, context):
     message = update.callback_query.message
     context.bot.delete_message(chat_id=message.chat_id,
-                               message_id=message.message_id)
+                               message_id=message.message_id)   # Stegrem mesajul trimis mai inainte de bot
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(text="Țara", callback_data="want_country")],
                                      [InlineKeyboardButton(text="Operator", callback_data="want_operator")],
                                      [InlineKeyboardButton(text="STOP", callback_data="stop")]])
 
-    reply_markup = keyboard
-    message.reply_text('Vreți să depistați operatorul sau țara acestui număr de telefon? \n'
+    message.reply_text(text='Vreți să depistați operatorul sau țara acestui număr de telefon? \n'
                        'Pot depista numai operatorii din Republica Moldova ',
-                       reply_markup=reply_markup)
+                       reply_markup=keyboard)
     return HANDLE_DECISION
 
 
@@ -58,12 +48,11 @@ def handle_operator_or_country(update, context):
 
 def handle_number(update, context):
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(text="Verifică alt număr", callback_data="check_number")]])
-
+    number = update.message.text  # numarul trimis spre verificare
     if context.user_data["decision"] == "want_country":
-        pn = phonenumbers.parse(update.message.text)
-        country = pycountry.countries.get(alpha_2=region_code_for_number(pn)).name
-        update.message.reply_text('Numărul {} este din țara: {}'.format(update.message.text,
-                                                                        country),
+        country_code = phonenumbers.parse(number)  # MD
+        update.message.reply_text('Numărul {} este din țara: {}'.format(number,  # UK
+                                                                        country_code),
                                   reply_markup=keyboard)
         return ConversationHandler.END
     elif context.user_data["decision"] == "want_operator":
@@ -76,9 +65,10 @@ def handle_number(update, context):
                           "067": "Unite",
                           "078": "Moldcell",
                           "079": "Moldcell",
+                          "022": "Chisinau"
                           }
-        operator = operators_dict.get(update.message.text[:3])
-        update.message.reply_text('Numărul {} aparatine operatorului: {}'.format(update.message.text,
+        operator = operators_dict.get(number[:3])
+        update.message.reply_text('Numărul {} aparatine operatorului: {}'.format(number,
                                                                                  operator),
                                   reply_markup=keyboard)
         return ConversationHandler.END
@@ -91,7 +81,7 @@ def cancel(update, context):
 
 def error(update, context):
     """Log Errors caused by Updates."""
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
+    print(context.error)
 
 
 def main():
@@ -100,7 +90,7 @@ def main():
 
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
-    rex_help_handler = MessageHandler(Filters.regex(r"^((?!@).)*$"), start)  # catch all messages
+    text_handler = MessageHandler(Filters.regex(r"^((?!@).)*$"), start)  # catch all messages
     start_handler = CommandHandler('start', start)  # catch the /start message
 
     conv_handler = ConversationHandler(
@@ -118,7 +108,7 @@ def main():
     dispatcher.add_handler(conv_handler)
     # log all errors
     # dispatcher.add_error_handler(error)
-    dispatcher.add_handler(rex_help_handler)  # Trebuie sa fie la urma, ultimul din toti "handlers"
+    dispatcher.add_handler(text_handler)  # Trebuie sa fie la urma, ultimul din toti "handlers"
 
     # Start the Bot
     updater.start_polling(timeout=60, read_latency=60, clean=True, bootstrap_retries=5)
